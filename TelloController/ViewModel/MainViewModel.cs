@@ -13,6 +13,9 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using TelloController.Models;
 using TelloController.Services;
+using System.IO;
+using Microsoft.Win32;
+using TelloController.Enums;
 
 namespace TelloController.ViewModel
 {
@@ -22,11 +25,10 @@ namespace TelloController.ViewModel
     public class MainViewModel : ViewModelBase
     {
         #region Private Fields
-        private ConnectionService _connection;
+        private Services.TelloController _connection;
 
-        private bool _isConnected;
-        private string _currentState;
-        private string _currentResult; 
+        private TelloState _currentState;
+        private string _log;
         #endregion
 
         #region Constructors
@@ -35,8 +37,6 @@ namespace TelloController.ViewModel
         /// </summary>
         public MainViewModel()
         {
-            ConnectionText = "Connect";
-
             Action<ControlCommand> executeCommandFunc = control => Send(control.Command);
 
             var command = new ControlCommand("command");
@@ -55,23 +55,6 @@ namespace TelloController.ViewModel
             var flip_r = new ControlCommand("flip r");
             var flip_f = new ControlCommand("flip f");
             var flip_b = new ControlCommand("flip b");
-
-            //InputBindings = new ObservableCollection<InputBinding>();
-            //InputBindings.Add(new InputBinding(new RelayCommand(() => Send(forward.Command)), new AnyKeyGesture(Key.W)));
-            //InputBindings.Add(new InputBinding(new RelayCommand(() => Send(new ControlCommand("cw", "deg", 3600, 1, 10).Command)), new AnyKeyGesture(Key.A)));
-            //InputBindings.Add(new InputBinding(new RelayCommand(() => Send(back.Command)), new AnyKeyGesture(Key.S)));
-            //InputBindings.Add(new InputBinding(new RelayCommand(() => Send(new ControlCommand("ccw", "deg", 3600, 1, 10).Command)), new AnyKeyGesture(Key.D)));
-
-            //InputBindings.Add(new InputBinding(new RelayCommand(() => Send(left.Command)), new AnyKeyGesture(Key.Q)));
-            //InputBindings.Add(new InputBinding(new RelayCommand(() => Send(right.Command)), new AnyKeyGesture(Key.E)));
-
-            //InputBindings.Add(new InputBinding(new RelayCommand(() => Send(up.Command)), new AnyKeyGesture(Key.R)));
-            //InputBindings.Add(new InputBinding(new RelayCommand(() => Send(down.Command)), new AnyKeyGesture(Key.F)));
-
-            //InputBindings.Add(new InputBinding(new RelayCommand(() => Send(takeoff.Command)), new AnyKeyGesture(Key.Z)));
-            //InputBindings.Add(new InputBinding(new RelayCommand(() => Send(land.Command)), new AnyKeyGesture(Key.X)));
-
-            //InputBindings.Add(new InputBinding(new RelayCommand(() => Send(emergency.Command)), new AnyKeyGesture(Key.Space)));
 
             ControlCommandsAvailable = new ObservableCollection<ControlCommand>
             {
@@ -99,22 +82,32 @@ namespace TelloController.ViewModel
                 {
                     Application.Current.Dispatcher.Invoke(new Action(() =>
                     {
-                        State = _currentState?.Replace(";", Environment.NewLine);
-                        Result = _currentResult;
+                        State = _currentState?.RawState.Replace(";", Environment.NewLine);
+                        Result = _log;
                     }));
                     Thread.Sleep(200);
                 }
             });
 
-            _connection = new ConnectionService();
+            _connection = new Services.TelloController();
             _connection.PropertyChanged += Connection_PropertyChanged;
+
+            UpdateConnectionState();
         } 
         #endregion
 
         #region Commands
         public RelayCommand ConnectCommand => new RelayCommand(Connect);
 
-        public RelayCommand<string> SendCommand => new RelayCommand<string>(Send); 
+        public RelayCommand<string> SendCommand => new RelayCommand<string>(Send);
+
+        public RelayCommand OpenCommand => new RelayCommand(Open);
+
+        public RelayCommand ExecuteCommandScriptCommand => new RelayCommand(ExecuteCommandScript);
+
+        public RelayCommand StartRecordingCommand => new RelayCommand(StartRecording);
+
+        public RelayCommand EndRecordingCommand => new RelayCommand(EndRecording);
         #endregion
 
         #region Properties
@@ -127,11 +120,25 @@ namespace TelloController.ViewModel
             set { Set(ref _connectionText, value); }
         }
 
+        private bool _isConnected;
+        public bool IsConnected
+        {
+            get { return _isConnected; }
+            set { Set(ref _isConnected, value); }
+        }
+
         private string _state = "";
         public string State
         {
             get { return _state; }
             set { Set(ref _state, value); }
+        }
+
+        private string _commandScript = "";
+        public string CommandScript
+        {
+            get { return _commandScript; }
+            set { Set(ref _commandScript, value); }
         }
 
         private string _result = "";
@@ -171,9 +178,19 @@ namespace TelloController.ViewModel
         #endregion
 
         #region Private Methods
+        private void StartRecording()
+        {
+            _connection.StartRecording();
+        }
+
+        private void EndRecording()
+        {
+            var states = _connection.EndRecording();
+        }
+
         private void Connection_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(ConnectionService.IsConnected))
+            if (e.PropertyName == nameof(Services.TelloController.IsListening))
             {
                 UpdateConnectionState();
             }
@@ -181,30 +198,149 @@ namespace TelloController.ViewModel
 
         private void UpdateConnectionState()
         {
-            ConnectionText = _connection.IsConnected ? "Disconnect" : "Connect";
+            ConnectionText = _connection.IsListening ? "Disconnect" : "Connect";
+            IsConnected = _connection.IsListening;
         }
 
         private void Connect()
         {
-            _connection.Connect((response) => ParseResponse(response));
+            _connection.Connect((response) => HandleCommandResponse(response), (state) => HandleState(state));
         }
 
         private void Send(string command)
         {
-            _connection.Send(command);
+            AddLogEntry($"Sending -> {command}");
+            _connection.SendCommand(command);
         }
 
-        private void ParseResponse(string response)
+        private CommandResponse SendCommandWithResponse(string command, int timeout)
         {
-            // check if it's a state response, or a sent command response
-            if (response.StartsWith("mid:"))
+            AddLogEntry($"Sending -> {command}");
+            return _connection.SendWithResponse(command, timeout);            
+        }
+
+        private void ExecuteCommandScript()
+        {
+            Task.Run(() =>
             {
-                _currentState = response;
-            }
-            else
+                try
+                {
+                    const int DEFAULT_TIMEOUT = 10;
+                    var timeout = DEFAULT_TIMEOUT;
+                    if (!_connection.IsListening) return;
+                    AddLogEntry($"* Executing script [Timeout = {timeout}]");
+                    var lines = CommandScript.Split('\n');
+
+                    foreach (var line in lines)
+                    {
+                        var entry = line.TrimEnd('\r');
+                        if (entry.StartsWith("//"))
+                        {
+                            continue;
+                        }
+                        if (entry.StartsWith("delay"))
+                        {
+                            var delayParts = entry.Split(' ');
+                            var seconds = int.Parse(delayParts[1]);
+                            Thread.Sleep(seconds * 1000);
+                        }
+                        else if (entry.StartsWith("set timeout"))
+                        {
+                            var timeoutParts = entry.Split(' ');
+                            timeout = int.Parse(timeoutParts[2]);
+                            AddLogEntry($"* Set timeout to: {timeout}");
+                        }
+                        else
+                        {
+                            var response = SendCommandWithResponse(entry, timeout);
+                            if (response.Code != ResponseCode.Ok)
+                            {
+                                // something unexpected happened, end the script and emergency land
+                                Send("emergency");
+                                throw new Exception("Expected response not received.");
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    AddLogEntry($"** Error: {ex.Message}");
+                }
+            });
+        }
+
+        private void Open()
+        {
+            try
             {
-                _currentResult = response + Environment.NewLine + _currentResult;
+                var dialog = new OpenFileDialog();
+                dialog.DefaultExt = ".command";
+                dialog.Filter = "Command Text Files (*.command)|*.command";
+                dialog.InitialDirectory = AppDomain.CurrentDomain.BaseDirectory + @"Resources";
+                var result = dialog.ShowDialog();
+
+                // Get the selected file name and display in a TextBox 
+                if (result == true)
+                {
+                    // Open document 
+                    var filename = dialog.FileName;
+                    ParseCommandFile(filename);
+                }
             }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error while opening file: {ex.Message}");
+            }
+            
+        }
+
+        private void ParseCommandFile(string filename)
+        {
+            try
+            {
+                if (!_connection.IsListening) return;
+                AddLogEntry("Reading command script");
+                CommandScript = File.ReadAllText(filename);
+            }
+            catch (Exception ex)
+            {
+                AddLogEntry($"Error: {ex.Message}");
+            }
+        }
+
+        private void HandleCommandResponse(CommandResponse response)
+        {
+            string logMessage;
+            switch (response.Code)
+            {
+                case ResponseCode.NotConnected:
+                    logMessage = "Not Connected";
+                    break;
+                case ResponseCode.Value:
+                    logMessage = response.ActualResponse.Replace("\n", string.Empty).Replace("\r", string.Empty);
+                    break;
+                case ResponseCode.Ok:
+                    logMessage = "OK";
+                    break;
+                case ResponseCode.Error:
+                    logMessage = "ERROR";
+                    break;
+                default:
+                    logMessage = "UNKNOWN_RESPONSE_CODE";
+                    break;
+            }
+            
+            AddLogEntry($"Received <- {logMessage}");
+        }
+
+        private void HandleState(TelloState state)
+        {
+            _currentState = state;
+        }
+
+        private void AddLogEntry(string entry)
+        {
+            _log = $"{entry}{Environment.NewLine}{_log}";
         }
         #endregion
     }

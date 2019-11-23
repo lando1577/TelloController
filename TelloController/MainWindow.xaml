@@ -9,7 +9,7 @@
         DataContext="{Binding Main, Source={StaticResource Locator}}"
         d:DataContext="{d:DesignInstance Type=vm:MainViewModel, IsDesignTimeCreatable=False}"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
+        Title="MainWindow" Height="700" Width="1000">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
     </Window.Resources>
@@ -33,16 +33,27 @@
             </Grid.RowDefinitions>
             
             <Grid Grid.Row="0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="auto"/>
+                    <RowDefinition Height="auto"/>
+                </Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBox Grid.Column="0" Text="{Binding CommandToSend}" Margin="5">
+
+                <StackPanel Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal">
+                    <Button Content="Start Recording" Command="{Binding StartRecordingCommand}" Margin="5" />
+                    <Button Content="End Recording" Command="{Binding EndRecordingCommand}" Margin="5" />
+                </StackPanel>
+                
+
+                <TextBox Grid.Row="1" Grid.Column="0" Text="{Binding CommandToSend}" Margin="5">
                     <TextBox.InputBindings>
                         <KeyBinding Command="{Binding SendCommand}" CommandParameter="{Binding CommandToSend}" Key="Return" />
                     </TextBox.InputBindings>
                 </TextBox>
-                <Button Grid.Column="1" Content="Send" Command="{Binding SendCommand}" CommandParameter="{Binding CommandToSend}" Margin="5" Padding="5 0"/>
+                <Button Grid.Row="1" Grid.Column="1" Content="Send" Command="{Binding SendCommand}" CommandParameter="{Binding CommandToSend}" Margin="5" Padding="5 0"/>
             </Grid>
 
             <Grid Grid.Row="1">
@@ -100,16 +111,46 @@
                     </ItemsControl>
                 </ScrollViewer>
             </Grid>
-            
 
-            <Button Grid.Row="4" Content="{Binding ConnectionText}" Command="{Binding ConnectCommand}" Margin="5"/>
+
+            <Grid Grid.Row="4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Button Grid.Column="0" Content="{Binding ConnectionText}" Command="{Binding ConnectCommand}" Margin="5"/>
+                <Button Grid.Column="1" Content="Open..." Command="{Binding OpenCommand}" IsEnabled="{Binding IsConnected}" Margin="5"/>
+            </Grid>
+            
         </Grid>
 
         <Rectangle Grid.Column="1" Width="1" Stroke="DarkGray"/>
-        <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
-            <TextBlock Text="{Binding State}" Margin="5"/>
-        </ScrollViewer>
-        
+        <Grid Grid.Column="2">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <TextBlock Text="{Binding State}" Margin="5"/>
+            </ScrollViewer>
+
+            <Rectangle Grid.Row="1" Height="1" Stroke="DarkGray"/>
+
+            <Grid Grid.Row="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="auto"/>
+                </Grid.RowDefinitions>
+                <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+                    <TextBox Text="{Binding CommandScript}" Margin="5" AcceptsReturn="True" BorderThickness="0"/>
+                </ScrollViewer>
+                <Button Grid.Row="1" Content="Execute" Command="{Binding ExecuteCommandScriptCommand}" Margin="5"/>
+            </Grid>
+            
+        </Grid>
+
         <Rectangle Grid.Column="3" Width="1" Stroke="DarkGray"/>
         <ScrollViewer Grid.Column="4" VerticalScrollBarVisibility="Auto">
             <TextBlock Text="{Binding Result}" Margin="5"/>
