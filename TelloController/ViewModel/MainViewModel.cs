@@ -12,34 +12,24 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
 using TelloController.Models;
+using TelloController.Services;
 
 namespace TelloController.ViewModel
 {
     /// <summary>
-    /// This class contains properties that the main View can data bind to.
-    /// <para>
-    /// Use the <strong>mvvminpc</strong> snippet to add bindable properties to this ViewModel.
-    /// </para>
-    /// <para>
-    /// You can also use Blend to data bind with the tool's support.
-    /// </para>
-    /// <para>
-    /// See http://www.galasoft.ch/mvvm
-    /// </para>
+    /// Viewmodel that drives the main window.
     /// </summary>
     public class MainViewModel : ViewModelBase
     {
-        private const int PortReceive = 8890;
-        private const int PortSend = 8889;
-        private const string Address = "192.168.10.1";
-
-        private UdpClient _server;
-        private UdpClient _commandClient;
+        #region Private Fields
+        private ConnectionService _connection;
 
         private bool _isConnected;
         private string _currentState;
-        private string _currentResult;
+        private string _currentResult; 
+        #endregion
 
+        #region Constructors
         /// <summary>
         /// Initializes a new instance of the MainViewModel class.
         /// </summary>
@@ -103,11 +93,11 @@ namespace TelloController.ViewModel
                 flip_b
             };
 
-            Task.Run(() => 
+            Task.Run(() =>
             {
                 while (true)
                 {
-                    Application.Current.Dispatcher.Invoke(new Action(() => 
+                    Application.Current.Dispatcher.Invoke(new Action(() =>
                     {
                         State = _currentState?.Replace(";", Environment.NewLine);
                         Result = _currentResult;
@@ -115,12 +105,19 @@ namespace TelloController.ViewModel
                     Thread.Sleep(200);
                 }
             });
-        }
 
+            _connection = new ConnectionService();
+            _connection.PropertyChanged += Connection_PropertyChanged;
+        } 
+        #endregion
+
+        #region Commands
         public RelayCommand ConnectCommand => new RelayCommand(Connect);
 
-        public RelayCommand<string> SendCommand => new RelayCommand<string>(Send);
+        public RelayCommand<string> SendCommand => new RelayCommand<string>(Send); 
+        #endregion
 
+        #region Properties
         public ObservableCollection<InputBinding> InputBindings { get; }
 
         private string _connectionText = "";
@@ -170,66 +167,45 @@ namespace TelloController.ViewModel
             "acceleration?",
             "tof?",
             "wifi?"
-        };
+        }; 
+        #endregion
 
-        public void Send(string command)
+        #region Private Methods
+        private void Connection_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
-            if (_commandClient == null) return;
-            var commandBytes = Encoding.UTF8.GetBytes(command);
-            _commandClient.Send(commandBytes, commandBytes.Length);
+            if (e.PropertyName == nameof(ConnectionService.IsConnected))
+            {
+                UpdateConnectionState();
+            }
         }
 
-        public void Connect()
+        private void UpdateConnectionState()
         {
-            if (_isConnected)
+            ConnectionText = _connection.IsConnected ? "Disconnect" : "Connect";
+        }
+
+        private void Connect()
+        {
+            _connection.Connect((response) => ParseResponse(response));
+        }
+
+        private void Send(string command)
+        {
+            _connection.Send(command);
+        }
+
+        private void ParseResponse(string response)
+        {
+            // check if it's a state response, or a sent command response
+            if (response.StartsWith("mid:"))
             {
-                _server?.Close();
-                _commandClient?.Close();
+                _currentState = response;
             }
             else
             {
-                _commandClient = new UdpClient(PortReceive);
-                _commandClient.Connect(Address, PortSend);
-                Task.Run(() =>
-                {
-                    ConnectAndMonitor();
-                });
+                _currentResult = response + Environment.NewLine + _currentResult;
             }
         }
-
-        private void ConnectAndMonitor()
-        {
-            State = "Connecting";
-            _isConnected = true;
-            ConnectionText = "Disconnect";
-
-            Console.WriteLine("Awaiting data from server...");
-            var remoteEP = new IPEndPoint(IPAddress.Any, 0);                       
-
-            try
-            {
-                while (true)
-                {
-                    byte[] bytesReceived = _commandClient.Receive(ref remoteEP);
-                    //Console.WriteLine($"Received {bytesReceived.Length} bytes from {remoteEP}");                   
-                    string returnData = Encoding.UTF8.GetString(bytesReceived);
-                    //Console.WriteLine(returnData);
-                    if (returnData.StartsWith("mid:"))
-                    {
-                        _currentState = returnData;
-                    }
-                    else
-                    {
-                        _currentResult = returnData + Environment.NewLine + _currentResult;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _isConnected = false;
-                ConnectionText = "Connect";
-                State = ex.Message;
-            }
-        }
+        #endregion
     }
 }
