@@ -162,6 +162,13 @@ namespace TelloController.UI
             set { Set(ref _commandToSend, value); }
         }
 
+        private DateTime _recordingStartTime;
+        public DateTime RecordingStartTime
+        {
+            get { return _recordingStartTime; }
+            set { Set(ref _recordingStartTime, value); }
+        }
+
         private ObservableCollection<ControlCommand> _controlCommandsAvailable;
         public ObservableCollection<ControlCommand> ControlCommandsAvailable
         {
@@ -187,6 +194,7 @@ namespace TelloController.UI
         #region Private Methods
         private void StartRecording()
         {
+            AddLogEntry(LogEntryType.Local, "Started recording");
             _connection.StartRecording();
         }
 
@@ -194,20 +202,27 @@ namespace TelloController.UI
         {
             var states = _connection.EndRecording();
             var exportDirectory = AppDomain.CurrentDomain.BaseDirectory + $"Export";
-            var exportFile = $"{exportDirectory}\\{DateTime.Now.ToString("s").Replace(":",string.Empty)}.csv";
+            var exportFile = $"{_connection.RecordingStartTime.ToString("s").Replace(":",string.Empty)}.csv";
+            var exportFullPath = $"{exportDirectory}\\{exportFile}";
             if (!Directory.Exists(exportDirectory))
             {
                 Directory.CreateDirectory(exportDirectory);
             }
-            CsvUtil.GenerateCsv(exportFile, states);
-            Process.Start(exportFile);
+            CsvUtil.GenerateCsv(exportFullPath, states);
+            AddLogEntry(LogEntryType.Local, $"Ended recording -> {exportFile}");
+            Process.Start(exportFullPath);
         }
 
-        private void Connection_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        private void Connection_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(Services.TelloController.IsListening))
+            switch (e.PropertyName)
             {
-                UpdateConnectionState();
+                case nameof(Services.TelloController.IsListening):
+                    UpdateConnectionState();
+                    break;
+                case nameof(Services.TelloController.RecordingStartTime):
+                    RecordingStartTime = _connection.RecordingStartTime;
+                    break;
             }
         }
 
@@ -219,6 +234,7 @@ namespace TelloController.UI
 
         private void Connect()
         {
+            AddLogEntry(LogEntryType.Local, IsConnected ? "Ending connection" : "Establishing connection");
             _connection.Connect((response) => HandleCommandResponse(response), (state) => HandleState(state));
         }
 
@@ -226,7 +242,7 @@ namespace TelloController.UI
         {
             try
             {
-                AddLogEntry(new LogEntry(LogEntryType.Send, $"{command}"));
+                AddLogEntry(LogEntryType.Send, $"{command}");
                 _connection.SendCommand(command);
             }
             catch (Exception ex)
@@ -237,7 +253,7 @@ namespace TelloController.UI
 
         private CommandResponse SendCommandWithResponse(string command, int timeout)
         {
-            AddLogEntry(new LogEntry(LogEntryType.Send, $"{command}"));
+            AddLogEntry(LogEntryType.Send, $"{command}");
             return _connection.SendCommandWithResponse(command, timeout);
         }
 
@@ -249,14 +265,15 @@ namespace TelloController.UI
                 {
                     const int DEFAULT_TIMEOUT = 10;
                     var timeout = DEFAULT_TIMEOUT;
-                    if (!_connection.IsListening) return;
-                    AddLogEntry(new LogEntry(LogEntryType.Local, $"Executing script [Timeout = {timeout}]"));
                     var lines = CommandScript.Split('\n');
+                    if (!_connection.IsListening || lines.Length == 0) return;
+                    AddLogEntry(LogEntryType.Space, string.Empty);
+                    AddLogEntry(LogEntryType.Local, $"Executing script [Timeout = {timeout}]");
 
                     foreach (var line in lines)
                     {
                         var entry = line.TrimEnd('\r');
-                        if (entry.StartsWith("//"))
+                        if (entry.StartsWith("//") || string.IsNullOrEmpty(entry))
                         {
                             continue;
                         }
@@ -270,7 +287,7 @@ namespace TelloController.UI
                         {
                             var timeoutParts = entry.Split(' ');
                             timeout = int.Parse(timeoutParts[2]);
-                            AddLogEntry(new LogEntry(LogEntryType.Local, $"Set timeout to: {timeout}"));
+                            AddLogEntry(LogEntryType.Local, $"Set timeout to: {timeout}");
                         }
                         else
                         {
@@ -286,8 +303,10 @@ namespace TelloController.UI
                 }
                 catch (Exception ex)
                 {
-                    AddLogEntry(new LogEntry(LogEntryType.Error, $"{ex.Message}"));
+                    AddLogEntry(LogEntryType.Error, $"{ex.Message}");
                 }
+                AddLogEntry(LogEntryType.Local, "Script finished");
+                AddLogEntry(LogEntryType.Space, string.Empty);
             });
         }
 
@@ -352,12 +371,17 @@ namespace TelloController.UI
                     break;
             }
             
-            AddLogEntry(new LogEntry(LogEntryType.Receive, $"{logMessage}"));
+            AddLogEntry(LogEntryType.Receive, $"{logMessage}");
         }
 
         private void HandleState(TelloState state)
         {
             _currentState = state;
+        }
+
+        private void AddLogEntry(LogEntryType type, string message, DateTime? time = null)
+        {
+            AddLogEntry(new LogEntry(type, message, time));
         }
 
         private void AddLogEntry(LogEntry entry)
@@ -366,7 +390,6 @@ namespace TelloController.UI
             {
                 LogEntries.Add(entry);
             }));
-            
         }
         #endregion
     }

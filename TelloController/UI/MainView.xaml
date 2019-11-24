@@ -22,7 +22,7 @@
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="300"/>
             <ColumnDefinition Width="auto"/>
-            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="300" MinWidth="250"/>
             <ColumnDefinition Width="auto"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
@@ -49,6 +49,7 @@
                 <StackPanel Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal">
                     <Button Content="Start Recording" Command="{Binding StartRecordingCommand}"/>
                     <Button Content="End Recording" Command="{Binding EndRecordingCommand}"/>
+                    <TextBlock Text="{Binding RecordingStartTime, StringFormat={}{0:HH:mm:ss}}" VerticalAlignment="Center"/>
                 </StackPanel>
 
 

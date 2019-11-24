@@ -11,6 +11,7 @@ namespace TelloController.Enums
         Send,
         Receive,
         Local,
-        Error
+        Error,
+        Space
     }
 }

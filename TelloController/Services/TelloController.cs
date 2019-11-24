@@ -19,7 +19,6 @@ namespace TelloController.Services
         private string _address;
         private UdpClient _connectionClient;
         private CommandResponse _lastResponse;
-        private DateTime _startTime;
         private List<TelloState> _recording;
         private bool _isRecording;
         #endregion
@@ -57,6 +56,13 @@ namespace TelloController.Services
                 ResetStartTime();
             }
         }
+
+        private DateTime _recordingStartTime;
+        public DateTime RecordingStartTime 
+        {
+            get => _recordingStartTime; 
+            private set => Set(ref _recordingStartTime, value); 
+        }
         #endregion
 
         #region Public Methods
@@ -82,6 +88,12 @@ namespace TelloController.Services
 
         public void StartRecording()
         {
+            if (_isRecording)
+            {
+                _recording = new List<TelloState>();
+                _isRecording = false;
+            }
+
             ResetStartTime();
             _recording = new List<TelloState>();
             _isRecording = true;
@@ -144,7 +156,7 @@ namespace TelloController.Services
         #region Private Methods
         private void ResetStartTime()
         {
-            _startTime = DateTime.Now;
+            RecordingStartTime = DateTime.Now;
         }
 
         private void Monitor(Action<CommandResponse> onCommandResponseHandler, Action<TelloState> onStateHandler)
@@ -160,7 +172,7 @@ namespace TelloController.Services
                     
                     if (responseString.StartsWith("mid:"))
                     {
-                        var state = ParseState(currentTime - _startTime, responseString);
+                        var state = ParseState(currentTime - RecordingStartTime, responseString);
                         if (_isRecording)
                         {
                             _recording.Add(state);

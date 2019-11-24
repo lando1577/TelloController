@@ -2,18 +2,22 @@
                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Style x:Key="SendTypeRowStyle" TargetType="DataGridRow"
        BasedOn="{StaticResource MetroDataGridRow}">
-        <Setter Property="Background" Value="#80149414"/>
+        <Setter Property="Background" Value="#3F008900"/>
     </Style>
     <Style x:Key="ReceiveTypeRowStyle" TargetType="DataGridRow"
        BasedOn="{StaticResource MetroDataGridRow}">
-        <Setter Property="Background" Value="#80184F96"/>
+        <Setter Property="Background" Value="#3F184F96"/>
     </Style>
     <Style x:Key="LocalTypeRowStyle" TargetType="DataGridRow"
        BasedOn="{StaticResource MetroDataGridRow}">
-        <Setter Property="Background" Value="#7F747474"/>
+        <Setter Property="Background" Value="#3F747474"/>
     </Style>
     <Style x:Key="ErrorTypeRowStyle" TargetType="DataGridRow"
        BasedOn="{StaticResource MetroDataGridRow}">
-        <Setter Property="Background" Value="#808B0000"/>
+        <Setter Property="Background" Value="#3F8B0000"/>
+    </Style>
+    <Style x:Key="SpaceTypeRowStyle" TargetType="DataGridRow"
+       BasedOn="{StaticResource MetroDataGridRow}">
+        <Setter Property="Opacity" Value="0"/>
     </Style>
 </ResourceDictionary>

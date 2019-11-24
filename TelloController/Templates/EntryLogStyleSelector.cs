@@ -31,6 +31,8 @@ namespace TelloController.Templates
                         return (Style)_dictionary["LocalTypeRowStyle"];
                     case Enums.LogEntryType.Error:
                         return (Style)_dictionary["ErrorTypeRowStyle"];
+                    case Enums.LogEntryType.Space:
+                        return (Style)_dictionary["SpaceTypeRowStyle"];
                 }
             }
             return null;
