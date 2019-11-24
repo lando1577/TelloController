@@ -46,9 +46,7 @@ namespace TelloController.Models
         }
 
         public int Timestamp { get; private set; }
-
-        public string RawState { get; private set; }
-
+        public string RawState { get; private set; }       
         public int Mid { get; private set; }
         public double X { get; private set; }
         public double Y { get; private set; }
@@ -70,6 +68,19 @@ namespace TelloController.Models
         public double AccelX { get; private set; }
         public double AccelY { get; private set; }
         public double AccelZ { get; private set; }
+
+        public static string GetCsvHeaderRow()
+        {
+            return "Timestamp,Pitch,Roll,Yaw,SpeedX,SpeedY,SpeedZ,TempLow,TempHigh,Tof,Height,Battery,Baro,MotorsOnTime,AccelX,AccelY,AccelZ";
+        }
+
+        public string GetCsvDataRow()
+        {
+            return 
+                $"{Timestamp},{Pitch},{Roll},{Yaw},{SpeedX},{SpeedY},{SpeedZ}," +
+                $"{TemperatureLow},{TemperatureHigh},{Tof},{Height},{BatteryPercentage}," +
+                $"{Barometer},{MotorsOnTime},{AccelX},{AccelY},{AccelZ}";
+        }
 
         public override string ToString()
         {

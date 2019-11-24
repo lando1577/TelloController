@@ -16,6 +16,9 @@ using TelloController.Services;
 using System.IO;
 using Microsoft.Win32;
 using TelloController.Enums;
+using System.Diagnostics;
+using System.ComponentModel;
+using System.Windows.Data;
 
 namespace TelloController.UI
 {
@@ -36,6 +39,10 @@ namespace TelloController.UI
         /// </summary>
         public MainViewModel()
         {
+            LogEntries = new ObservableCollection<LogEntry>();
+            LogEntriesCollectionView = CollectionViewSource.GetDefaultView(LogEntries);
+            LogEntriesCollectionView.SortDescriptions.Add(new SortDescription(nameof(LogEntry.Time), ListSortDirection.Descending));          
+
             Action<ControlCommand> executeCommandFunc = control => Send(control.Command);
 
             var command = new ControlCommand("command");
@@ -81,7 +88,7 @@ namespace TelloController.UI
                 {
                     Application.Current.Dispatcher.Invoke(new Action(() =>
                     {
-                        State = _currentState?.RawState.Replace(";", Environment.NewLine);
+                        State = _currentState;
                     }));
                     Thread.Sleep(200);
                 }
@@ -109,7 +116,9 @@ namespace TelloController.UI
         #endregion
 
         #region Properties
-        public ObservableCollection<LogEntry> LogEntries { get; } = new ObservableCollection<LogEntry>();
+        public ObservableCollection<LogEntry> LogEntries { get; }
+
+        public ICollectionView LogEntriesCollectionView { get; }
 
         private string _connectionText = "";
         public string ConnectionText
@@ -125,8 +134,8 @@ namespace TelloController.UI
             set { Set(ref _isConnected, value); }
         }
 
-        private string _state = "";
-        public string State
+        private TelloState _state;
+        public TelloState State
         {
             get { return _state; }
             set { Set(ref _state, value); }
@@ -184,6 +193,14 @@ namespace TelloController.UI
         private void EndRecording()
         {
             var states = _connection.EndRecording();
+            var exportDirectory = AppDomain.CurrentDomain.BaseDirectory + $"Export";
+            var exportFile = $"{exportDirectory}\\{DateTime.Now.ToString("s").Replace(":",string.Empty)}.csv";
+            if (!Directory.Exists(exportDirectory))
+            {
+                Directory.CreateDirectory(exportDirectory);
+            }
+            CsvUtil.GenerateCsv(exportFile, states);
+            Process.Start(exportFile);
         }
 
         private void Connection_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -207,14 +224,21 @@ namespace TelloController.UI
 
         private void Send(string command)
         {
-            AddLogEntry(new LogEntry(LogEntryType.Send, $"{command}"));
-            _connection.SendCommand(command);
+            try
+            {
+                AddLogEntry(new LogEntry(LogEntryType.Send, $"{command}"));
+                _connection.SendCommand(command);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to send: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private CommandResponse SendCommandWithResponse(string command, int timeout)
         {
             AddLogEntry(new LogEntry(LogEntryType.Send, $"{command}"));
-            return _connection.SendWithResponse(command, timeout);            
+            return _connection.SendCommandWithResponse(command, timeout);
         }
 
         private void ExecuteCommandScript()

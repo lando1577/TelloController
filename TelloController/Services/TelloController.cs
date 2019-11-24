@@ -95,33 +95,49 @@ namespace TelloController.Services
 
         public void SendCommand(string command)
         {
-            if (_connectionClient == null) return;
-
-            var commandBytes = Encoding.UTF8.GetBytes(command);
-            _connectionClient.Send(commandBytes, commandBytes.Length);
+            try
+            {
+                var commandBytes = Encoding.UTF8.GetBytes(command);
+                _connectionClient.Send(commandBytes, commandBytes.Length);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"SendCommand Error: {ex.Message}");
+                EndConnection();
+                throw;
+            }            
         }
 
-        public CommandResponse SendWithResponse(string command, int timeout)
+        public CommandResponse SendCommandWithResponse(string command, int timeout)
         {
-            if (_connectionClient == null) return new CommandResponse("Not connected", ResponseCode.NotConnected);
-
-            _lastResponse = null;
-
-            SendCommand(command);
-
-            int attemps = 0;
-            while (_lastResponse == null && attemps <= timeout)
+            try
             {
-                attemps++;
-                Thread.Sleep(1000);
-            }
+                if (_connectionClient == null) return new CommandResponse("Not connected", ResponseCode.NotConnected);
 
-            if (attemps > timeout)
+                _lastResponse = null;
+
+                SendCommand(command);
+
+                int attemps = 0;
+                while (_lastResponse == null && attemps <= timeout)
+                {
+                    attemps++;
+                    Thread.Sleep(1000);
+                }
+
+                if (attemps > timeout)
+                {
+                    throw new TimeoutException("Expected response was not received within the timeout");
+                }
+
+                return _lastResponse;
+            }
+            catch (Exception ex)
             {
-                throw new TimeoutException("Expected response was not received within the timeout");
-            }
-
-            return _lastResponse;
+                Console.WriteLine($"SendCommandWithResponse Error: {ex.Message}");
+                EndConnection();
+                throw;
+            }            
         } 
         #endregion
 
@@ -159,11 +175,17 @@ namespace TelloController.Services
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                _connectionClient.Close();
-                IsListening = false;
+                Console.WriteLine($"Monitor Error: {ex.Message}");
+                EndConnection();
             }
+        }
+
+        private void EndConnection()
+        {
+            _connectionClient?.Close();
+            IsListening = false;
         }
 
         private TelloState ParseState(TimeSpan timeSpan, string rawResponse)
