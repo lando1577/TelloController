@@ -36,8 +36,9 @@
                 <RowDefinition Height="auto"/>
             </Grid.RowDefinitions>
 
-            <Grid Grid.Row="0">
+            <Grid Grid.Row="0" IsEnabled="{Binding IsListening}">
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="auto"/>
                     <RowDefinition Height="auto"/>
                     <RowDefinition Height="auto"/>
                 </Grid.RowDefinitions>
@@ -47,21 +48,29 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal">
-                    <Button Content="Start Recording" Command="{Binding StartRecordingCommand}"/>
-                    <Button Content="End Recording" Command="{Binding EndRecordingCommand}"/>
-                    <TextBlock Text="{Binding RecordingStartTime, StringFormat={}{0:HH:mm:ss}}" VerticalAlignment="Center"/>
+                    <Button Content="{Binding RecordingText}" Command="{Binding StartStopRecordingCommand}"/>
+                    <Button Content="End Recording" Command="{Binding EndRecordingCommand}" IsEnabled="{Binding IsRecording}"/>
                 </StackPanel>
 
+                <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal" IsEnabled="{Binding IsRecording}">
+                    <TextBlock Visibility="{Binding IsRecording, Converter={StaticResource BooleanToVisibilityConverter}}" Margin="5">
+                        <Run Text="Start Time:"/>
+                        <Run Text="{Binding RecordingStartTime, Mode=OneWay, StringFormat={}{0:HH:mm:ss}}"/>
+                        <Run Text=" "/>
+                        <Run Text="Duration:"/>
+                        <Run Text="{Binding RecordingDuration, Mode=OneWay, StringFormat={}{0:h\\:m\\:ss\\.f}}"/>
+                    </TextBlock>
+                </StackPanel>
 
-                <TextBox Grid.Row="1" Grid.Column="0" Text="{Binding CommandToSend}" Margin="5">
+                <TextBox Grid.Row="2" Grid.Column="0" Text="{Binding CommandToSend}" Margin="5">
                     <TextBox.InputBindings>
                         <KeyBinding Command="{Binding SendCommand}" CommandParameter="{Binding CommandToSend}" Key="Return" />
                     </TextBox.InputBindings>
                 </TextBox>
-                <Button Grid.Row="1" Grid.Column="1" Content="Send" Command="{Binding SendCommand}" CommandParameter="{Binding CommandToSend}" />
+                <Button Grid.Row="2" Grid.Column="1" Content="Send" Command="{Binding SendCommand}" CommandParameter="{Binding CommandToSend}" />
             </Grid>
 
-            <Grid Grid.Row="1">
+            <Grid Grid.Row="1" IsEnabled="{Binding IsListening}">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="auto"/>
                     <RowDefinition Height="*"/>
@@ -90,7 +99,7 @@
 
             <GridSplitter Grid.Row="2" HorizontalAlignment="Stretch" Height="2"/>
 
-            <Grid Grid.Row="3">
+            <Grid Grid.Row="3" IsEnabled="{Binding IsListening}">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="auto"/>
                     <RowDefinition Height="*"/>
@@ -124,7 +133,7 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 <Button Grid.Column="0" Content="{Binding ConnectionText}" Command="{Binding ConnectCommand}" Margin="5"/>
-                <Button Grid.Column="1" Content="Open..." Command="{Binding OpenCommand}" IsEnabled="{Binding IsConnected}" Margin="5"/>
+                <Button Grid.Column="1" Content="Open..." Command="{Binding OpenCommand}" Margin="5"/>
             </Grid>
         </Grid>
 
@@ -231,7 +240,7 @@
                 <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
                     <TextBox Text="{Binding CommandScript}" Margin="5" AcceptsReturn="True" BorderThickness="0"/>
                 </ScrollViewer>
-                <Button Grid.Row="1" Content="Execute" Command="{Binding ExecuteCommandScriptCommand}" Margin="5"/>
+                <Button Grid.Row="1" Content="Execute" Command="{Binding ExecuteCommandScriptCommand}" IsEnabled="{Binding IsListening}" Margin="5"/>
             </Grid>
 
         </Grid>

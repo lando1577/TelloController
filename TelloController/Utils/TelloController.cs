@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 using TelloController.Enums;
 using TelloController.Models;
 
-namespace TelloController.Services
+namespace TelloController.Utils
 {
     public class TelloController : ViewModelBase
     {
@@ -17,10 +17,9 @@ namespace TelloController.Services
         private int _portReceive;
         private int _portSend;
         private string _address;
-        private UdpClient _connectionClient;
-        private CommandResponse _lastResponse;
-        private List<TelloState> _recording;
-        private bool _isRecording;
+        private UdpClient _telloClient;
+        private CommandResponse _lastCommandResponse;
+        private List<TelloState> _recordingData;
         #endregion
 
         #region Constructors
@@ -46,15 +45,23 @@ namespace TelloController.Services
         #endregion
 
         #region Public Properties
-        private bool _isConnected;
+        private bool _isListening;
         public bool IsListening
         {
-            get => _isConnected;
+            get => _isListening;
             set
             {
-                Set(ref _isConnected, value);
+                Set(ref _isListening, value);
+                if (!IsListening) IsRecording = false;
                 ResetStartTime();
             }
+        }
+
+        private bool _isRecording;
+        public bool IsRecording
+        {
+            get => _isRecording;
+            set => Set(ref _isRecording, value);
         }
 
         private DateTime _recordingStartTime;
@@ -70,13 +77,13 @@ namespace TelloController.Services
         {
             if (IsListening)
             {
-                _connectionClient?.Close();
+                _telloClient?.Close();
                 IsListening = false;
             }
             else
             {
-                _connectionClient = new UdpClient(_portReceive);
-                _connectionClient.Connect(_address, _portSend);
+                _telloClient = new UdpClient(_portReceive);
+                _telloClient.Connect(_address, _portSend);
 
                 IsListening = true;
                 Task.Run(() =>
@@ -86,23 +93,23 @@ namespace TelloController.Services
             }
         }
 
-        public void StartRecording()
+        public void StartStopRecording()
         {
-            if (_isRecording)
+            if (!IsListening)
             {
-                _recording = new List<TelloState>();
-                _isRecording = false;
+                IsRecording = false;
+                return;
             }
 
             ResetStartTime();
-            _recording = new List<TelloState>();
-            _isRecording = true;
+            _recordingData = new List<TelloState>();
+            IsRecording = !IsRecording;
         }
 
         public List<TelloState> EndRecording()
         {
-            _isRecording = false;
-            return _recording;
+            IsRecording = false;
+            return _recordingData;
         }
 
         public void SendCommand(string command)
@@ -110,7 +117,7 @@ namespace TelloController.Services
             try
             {
                 var commandBytes = Encoding.UTF8.GetBytes(command);
-                _connectionClient.Send(commandBytes, commandBytes.Length);
+                _telloClient.Send(commandBytes, commandBytes.Length);
             }
             catch (Exception ex)
             {
@@ -124,14 +131,14 @@ namespace TelloController.Services
         {
             try
             {
-                if (_connectionClient == null) return new CommandResponse("Not connected", ResponseCode.NotConnected);
+                if (_telloClient == null) return new CommandResponse("Not connected", ResponseCode.NotConnected);
 
-                _lastResponse = null;
+                _lastCommandResponse = null;
 
                 SendCommand(command);
 
                 int attemps = 0;
-                while (_lastResponse == null && attemps <= timeout)
+                while (_lastCommandResponse == null && attemps <= timeout)
                 {
                     attemps++;
                     Thread.Sleep(1000);
@@ -142,7 +149,7 @@ namespace TelloController.Services
                     throw new TimeoutException("Expected response was not received within the timeout");
                 }
 
-                return _lastResponse;
+                return _lastCommandResponse;
             }
             catch (Exception ex)
             {
@@ -166,7 +173,7 @@ namespace TelloController.Services
             {
                 while (true)
                 {
-                    byte[] bytesReceived = _connectionClient.Receive(ref endpoint);
+                    byte[] bytesReceived = _telloClient.Receive(ref endpoint);
                     string responseString = Encoding.UTF8.GetString(bytesReceived);
                     var currentTime = DateTime.Now;
                     
@@ -175,14 +182,14 @@ namespace TelloController.Services
                         var state = ParseState(currentTime - RecordingStartTime, responseString);
                         if (_isRecording)
                         {
-                            _recording.Add(state);
+                            _recordingData.Add(state);
                         }
                         onStateHandler.Invoke(state);
                     }
                     else
                     {
                         var commandResponse = new CommandResponse(responseString, ParseResponseCode(responseString));
-                        _lastResponse = commandResponse;
+                        _lastCommandResponse = commandResponse;
                         onCommandResponseHandler.Invoke(commandResponse);
                     }
                 }
@@ -196,7 +203,7 @@ namespace TelloController.Services
 
         private void EndConnection()
         {
-            _connectionClient?.Close();
+            _telloClient?.Close();
             IsListening = false;
         }
 

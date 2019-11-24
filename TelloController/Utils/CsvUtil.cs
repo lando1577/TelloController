@@ -6,7 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using TelloController.Models;
 
-namespace TelloController.Services
+namespace TelloController.Utils
 {
     public static class CsvUtil
     {

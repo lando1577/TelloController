@@ -12,7 +12,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
 using TelloController.Models;
-using TelloController.Services;
+using TelloController.Utils;
 using System.IO;
 using Microsoft.Win32;
 using TelloController.Enums;
@@ -28,7 +28,7 @@ namespace TelloController.UI
     public class MainViewModel : ViewModelBase
     {
         #region Private Fields
-        private Services.TelloController _connection;
+        private Utils.TelloController _connection;
 
         private TelloState _currentState;        
         #endregion
@@ -82,6 +82,7 @@ namespace TelloController.UI
                 flip_b
             };
 
+            // background thread for updating various states
             Task.Run(() =>
             {
                 while (true)
@@ -89,15 +90,23 @@ namespace TelloController.UI
                     Application.Current.Dispatcher.Invoke(new Action(() =>
                     {
                         State = _currentState;
+                        if (IsRecording)
+                        {
+                            RecordingDuration = DateTime.Now - RecordingStartTime;
+                        }
+                        else
+                        {
+                            RecordingDuration = null;
+                        }
                     }));
                     Thread.Sleep(200);
                 }
             });
 
-            _connection = new Services.TelloController();
+            _connection = new Utils.TelloController();
             _connection.PropertyChanged += Connection_PropertyChanged;
 
-            UpdateConnectionState();
+            UpdateControllerState();
         } 
         #endregion
 
@@ -110,12 +119,25 @@ namespace TelloController.UI
 
         public RelayCommand ExecuteCommandScriptCommand => new RelayCommand(ExecuteCommandScript);
 
-        public RelayCommand StartRecordingCommand => new RelayCommand(StartRecording);
+        public RelayCommand StartStopRecordingCommand => new RelayCommand(StartStopRecording);
 
         public RelayCommand EndRecordingCommand => new RelayCommand(EndRecording);
         #endregion
 
         #region Properties
+        public bool IsListening => _connection?.IsListening ?? false;
+
+        public bool IsRecording => _connection?.IsRecording ?? false;
+
+        public DateTime RecordingStartTime => _connection?.RecordingStartTime ?? DateTime.MinValue;
+
+        private TimeSpan? _recordingDuration;
+        public TimeSpan? RecordingDuration
+        {
+            get => _recordingDuration;
+            set => Set(ref _recordingDuration, value);
+        }
+
         public ObservableCollection<LogEntry> LogEntries { get; }
 
         public ICollectionView LogEntriesCollectionView { get; }
@@ -127,11 +149,11 @@ namespace TelloController.UI
             set { Set(ref _connectionText, value); }
         }
 
-        private bool _isConnected;
-        public bool IsConnected
+        private string _recordingText = "";
+        public string RecordingText
         {
-            get { return _isConnected; }
-            set { Set(ref _isConnected, value); }
+            get { return _recordingText; }
+            set { Set(ref _recordingText, value); }
         }
 
         private TelloState _state;
@@ -160,14 +182,7 @@ namespace TelloController.UI
         {
             get { return _commandToSend; }
             set { Set(ref _commandToSend, value); }
-        }
-
-        private DateTime _recordingStartTime;
-        public DateTime RecordingStartTime
-        {
-            get { return _recordingStartTime; }
-            set { Set(ref _recordingStartTime, value); }
-        }
+        }        
 
         private ObservableCollection<ControlCommand> _controlCommandsAvailable;
         public ObservableCollection<ControlCommand> ControlCommandsAvailable
@@ -192,17 +207,18 @@ namespace TelloController.UI
         #endregion
 
         #region Private Methods
-        private void StartRecording()
+        private void StartStopRecording()
         {
-            AddLogEntry(LogEntryType.Local, "Started recording");
-            _connection.StartRecording();
+            AddLogEntry(LogEntryType.Local, IsRecording ? "Stopping recording" : "Started recording");
+            _connection.StartStopRecording();
+
         }
 
         private void EndRecording()
         {
             var states = _connection.EndRecording();
             var exportDirectory = AppDomain.CurrentDomain.BaseDirectory + $"Export";
-            var exportFile = $"{_connection.RecordingStartTime.ToString("s").Replace(":",string.Empty)}.csv";
+            var exportFile = $"tello_{_connection.RecordingStartTime.ToString("s").Replace(":",string.Empty)}.csv";
             var exportFullPath = $"{exportDirectory}\\{exportFile}";
             if (!Directory.Exists(exportDirectory))
             {
@@ -210,31 +226,36 @@ namespace TelloController.UI
             }
             CsvUtil.GenerateCsv(exportFullPath, states);
             AddLogEntry(LogEntryType.Local, $"Ended recording -> {exportFile}");
-            Process.Start(exportFullPath);
+            Process.Start(exportDirectory);
         }
 
         private void Connection_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
             switch (e.PropertyName)
             {
-                case nameof(Services.TelloController.IsListening):
-                    UpdateConnectionState();
+                case nameof(Utils.TelloController.IsListening):
+                    UpdateControllerState();
+                    RaisePropertyChanged(e.PropertyName);
                     break;
-                case nameof(Services.TelloController.RecordingStartTime):
-                    RecordingStartTime = _connection.RecordingStartTime;
+                case nameof(Utils.TelloController.RecordingStartTime):
+                    RaisePropertyChanged(e.PropertyName);
+                    break;
+                case nameof(Utils.TelloController.IsRecording):
+                    UpdateControllerState();
+                    RaisePropertyChanged(e.PropertyName);
                     break;
             }
         }
 
-        private void UpdateConnectionState()
+        private void UpdateControllerState()
         {
-            ConnectionText = _connection.IsListening ? "Disconnect" : "Connect";
-            IsConnected = _connection.IsListening;
+            ConnectionText = IsListening ? "Disconnect" : "Connect";
+            RecordingText = IsRecording ? "Stop Recording" : "Start Recording";
         }
 
         private void Connect()
         {
-            AddLogEntry(LogEntryType.Local, IsConnected ? "Ending connection" : "Establishing connection");
+            AddLogEntry(LogEntryType.Local, IsListening ? "Ending connection" : "Establishing connection");
             _connection.Connect((response) => HandleCommandResponse(response), (state) => HandleState(state));
         }
 
@@ -339,7 +360,6 @@ namespace TelloController.UI
         {
             try
             {
-                if (!_connection.IsListening) return;
                 AddLogEntry(new LogEntry(LogEntryType.Local, "Reading command script"));
                 CommandScript = File.ReadAllText(filename);
             }

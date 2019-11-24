@@ -96,8 +96,8 @@
     <Compile Include="Models\LogEntry.cs" />
     <Compile Include="Models\Response.cs" />
     <Compile Include="Models\TelloState.cs" />
-    <Compile Include="Services\CsvUtil.cs" />
-    <Compile Include="Services\TelloController.cs" />
+    <Compile Include="Utils\CsvUtil.cs" />
+    <Compile Include="Utils\TelloController.cs" />
     <Compile Include="Templates\EntryLogStyleSelector.cs" />
     <Compile Include="UI\MainView.xaml.cs">
       <DependentUpon>MainView.xaml</DependentUpon>
@@ -148,12 +148,18 @@
       <Generator>SettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>
     </None>
+    <None Include="Resources\forward_and_back.command">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Resources\square.command">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="Resources\example.command">
+    <None Include="Resources\circle.command">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
