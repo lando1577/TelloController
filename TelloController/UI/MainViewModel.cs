@@ -17,7 +17,7 @@ using System.IO;
 using Microsoft.Win32;
 using TelloController.Enums;
 
-namespace TelloController.ViewModel
+namespace TelloController.UI
 {
     /// <summary>
     /// Viewmodel that drives the main window.
@@ -27,8 +27,7 @@ namespace TelloController.ViewModel
         #region Private Fields
         private Services.TelloController _connection;
 
-        private TelloState _currentState;
-        private string _log;
+        private TelloState _currentState;        
         #endregion
 
         #region Constructors
@@ -83,7 +82,6 @@ namespace TelloController.ViewModel
                     Application.Current.Dispatcher.Invoke(new Action(() =>
                     {
                         State = _currentState?.RawState.Replace(";", Environment.NewLine);
-                        Result = _log;
                     }));
                     Thread.Sleep(200);
                 }
@@ -111,7 +109,7 @@ namespace TelloController.ViewModel
         #endregion
 
         #region Properties
-        public ObservableCollection<InputBinding> InputBindings { get; }
+        public ObservableCollection<LogEntry> LogEntries { get; } = new ObservableCollection<LogEntry>();
 
         private string _connectionText = "";
         public string ConnectionText
@@ -209,13 +207,13 @@ namespace TelloController.ViewModel
 
         private void Send(string command)
         {
-            AddLogEntry($"Sending -> {command}");
+            AddLogEntry(new LogEntry(LogEntryType.Send, $"{command}"));
             _connection.SendCommand(command);
         }
 
         private CommandResponse SendCommandWithResponse(string command, int timeout)
         {
-            AddLogEntry($"Sending -> {command}");
+            AddLogEntry(new LogEntry(LogEntryType.Send, $"{command}"));
             return _connection.SendWithResponse(command, timeout);            
         }
 
@@ -228,7 +226,7 @@ namespace TelloController.ViewModel
                     const int DEFAULT_TIMEOUT = 10;
                     var timeout = DEFAULT_TIMEOUT;
                     if (!_connection.IsListening) return;
-                    AddLogEntry($"* Executing script [Timeout = {timeout}]");
+                    AddLogEntry(new LogEntry(LogEntryType.Local, $"Executing script [Timeout = {timeout}]"));
                     var lines = CommandScript.Split('\n');
 
                     foreach (var line in lines)
@@ -248,7 +246,7 @@ namespace TelloController.ViewModel
                         {
                             var timeoutParts = entry.Split(' ');
                             timeout = int.Parse(timeoutParts[2]);
-                            AddLogEntry($"* Set timeout to: {timeout}");
+                            AddLogEntry(new LogEntry(LogEntryType.Local, $"Set timeout to: {timeout}"));
                         }
                         else
                         {
@@ -264,7 +262,7 @@ namespace TelloController.ViewModel
                 }
                 catch (Exception ex)
                 {
-                    AddLogEntry($"** Error: {ex.Message}");
+                    AddLogEntry(new LogEntry(LogEntryType.Error, $"{ex.Message}"));
                 }
             });
         }
@@ -299,12 +297,12 @@ namespace TelloController.ViewModel
             try
             {
                 if (!_connection.IsListening) return;
-                AddLogEntry("Reading command script");
+                AddLogEntry(new LogEntry(LogEntryType.Local, "Reading command script"));
                 CommandScript = File.ReadAllText(filename);
             }
             catch (Exception ex)
             {
-                AddLogEntry($"Error: {ex.Message}");
+                AddLogEntry(new LogEntry(LogEntryType.Error, $"{ex.Message}"));
             }
         }
 
@@ -330,7 +328,7 @@ namespace TelloController.ViewModel
                     break;
             }
             
-            AddLogEntry($"Received <- {logMessage}");
+            AddLogEntry(new LogEntry(LogEntryType.Receive, $"{logMessage}"));
         }
 
         private void HandleState(TelloState state)
@@ -338,9 +336,13 @@ namespace TelloController.ViewModel
             _currentState = state;
         }
 
-        private void AddLogEntry(string entry)
+        private void AddLogEntry(LogEntry entry)
         {
-            _log = $"{entry}{Environment.NewLine}{_log}";
+            Application.Current.Dispatcher.Invoke(new Action(() => 
+            {
+                LogEntries.Add(entry);
+            }));
+            
         }
         #endregion
     }

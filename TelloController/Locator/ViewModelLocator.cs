@@ -13,10 +13,10 @@
 */
 
 using CommonServiceLocator;
-using GalaSoft.MvvmLight;
 using GalaSoft.MvvmLight.Ioc;
+using TelloController.UI;
 
-namespace TelloController.ViewModel
+namespace TelloController.Locator
 {
     /// <summary>
     /// This class contains static references to all the view models in the
@@ -52,7 +52,7 @@ namespace TelloController.ViewModel
                 return ServiceLocator.Current.GetInstance<MainViewModel>();
             }
         }
-        
+
         public static void Cleanup()
         {
             // TODO Clear the ViewModels
